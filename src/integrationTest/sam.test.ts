@@ -23,6 +23,7 @@ import { setTestTimeout } from './globalSetup.test'
 import { waitUntil } from '../shared/utilities/timeoutUtils'
 import { AwsSamDebuggerConfiguration } from '../shared/sam/debugger/awsSamDebugConfiguration.gen'
 import { ext } from '../shared/extensionGlobals'
+import { AwsSamTargetType } from '../shared/sam/debugger/awsSamDebugConfiguration'
 
 const projectFolder = getTestWorkspaceFolder()
 
@@ -241,6 +242,11 @@ describe('SAM Integration Tests', async function () {
     const sessionLog: string[] = []
     let testSuiteRoot: string
 
+    function logSession(scenarioIndex: number, target: AwsSamTargetType, startEnd: 'START' | 'END', name: string) {
+        const scenario = scenarios[scenarioIndex]
+        sessionLog.push(`scenario ${scenarioIndex} ${startEnd} ${target}/${scenario.displayName}: ${name}`)
+    }
+
     before(async function () {
         await activateExtensions()
         await configureAwsToolkitExtension()
@@ -255,7 +261,7 @@ describe('SAM Integration Tests', async function () {
         tryRemoveFolder(testSuiteRoot)
         // Print a summary of session that were seen by `onDidStartDebugSession`.
         const sessionReport = sessionLog.map(x => `    ${x}`).join('\n')
-        console.log(`DebugSessions seen in this run:${sessionReport}`)
+        console.log(`DebugSessions seen in this run:\n    ${sessionReport}`)
     })
 
     for (let scenarioIndex = 0; scenarioIndex < scenarios.length; scenarioIndex++) {
@@ -369,8 +375,23 @@ describe('SAM Integration Tests', async function () {
                     assertCodeLensReferencesHasSameRoot(codeLens, projectRoot!)
                 })
 
-                it('invokes and attaches on debug request (F5)', async function () {
+                it('target=api: invokes and attaches on debug request (F5)', async function () {
                     setTestTimeout(this.test?.fullTitle(), 90000)
+                    await testTarget('api', {
+                        api: {
+                            path: '/hello',
+                            httpMethod: 'get',
+                            headers: { 'accept-language': 'fr-FR' },
+                        },
+                    })
+                })
+
+                it('target=template: invokes and attaches on debug request (F5)', async function () {
+                    setTestTimeout(this.test?.fullTitle(), 90000)
+                    await testTarget('template')
+                })
+
+                async function testTarget(target: AwsSamTargetType, extraConfig: any = {}) {
                     // Allow previous sessions to go away.
                     await waitUntil(
                         async function () {
@@ -394,11 +415,12 @@ describe('SAM Integration Tests', async function () {
                         request: 'direct-invoke',
                         name: `test-config-${scenarioIndex}`,
                         invokeTarget: {
-                            target: 'template',
+                            target: target,
                             // Resource defined in `src/testFixtures/.../template.yaml`.
                             logicalId: 'HelloWorldFunction',
                             templatePath: cfnTemplatePath,
                         },
+                        ...extraConfig,
                     } as AwsSamDebuggerConfiguration
 
                     // runtime is optional for ZIP, but required for image-based
@@ -420,18 +442,14 @@ describe('SAM Integration Tests', async function () {
                         if (runtimeNeedsWorkaround(scenario.language)) {
                             testDisposables.push(
                                 vscode.debug.onDidTerminateDebugSession(session => {
-                                    sessionLog.push(
-                                        `scenario ${scenarioIndex} (END) (runtime=${scenario.runtime}) ${session.name}`
-                                    )
+                                    logSession(scenarioIndex, target, 'END', session.name)
                                     resolve()
                                 })
                             )
                         }
                         testDisposables.push(
                             vscode.debug.onDidStartDebugSession(async startedSession => {
-                                sessionLog.push(
-                                    `scenario ${scenarioIndex} (START) (runtime=${scenario.runtime}) ${startedSession.name}`
-                                )
+                                logSession(scenarioIndex, target, 'START', startedSession.name)
 
                                 // If `onDidStartDebugSession` is fired then the debugger doesn't need the workaround anymore.
                                 if (runtimeNeedsWorkaround(scenario.language)) {
@@ -446,9 +464,7 @@ describe('SAM Integration Tests', async function () {
                                 // Wait for this debug session to terminate
                                 testDisposables.push(
                                     vscode.debug.onDidTerminateDebugSession(async endedSession => {
-                                        sessionLog.push(
-                                            `scenario ${scenarioIndex} (END) (runtime=${scenario.runtime}) ${endedSession.name}`
-                                        )
+                                        logSession(scenarioIndex, target, 'END', endedSession.name)
                                         const sessionRuntime = (endedSession.configuration as any).runtime
                                         if (!sessionRuntime) {
                                             // It's a coprocess, ignore it.
@@ -479,7 +495,7 @@ describe('SAM Integration Tests', async function () {
                     }).catch(e => {
                         throw e
                     })
-                })
+                }
             })
         })
 
