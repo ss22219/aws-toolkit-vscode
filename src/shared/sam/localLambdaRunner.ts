@@ -70,7 +70,7 @@ function makeResourceName(config: SamLaunchRequestArgs): string {
 
 const SAM_LOCAL_PORT_CHECK_RETRY_INTERVAL_MILLIS: number = 125
 const SAM_LOCAL_PORT_CHECK_RETRY_TIMEOUT_MILLIS_DEFAULT: number = 30000
-const MAX_DEBUGGER_RETRIES: number = 4
+const MAX_DEBUGGER_RETRIES: number = 1
 const ATTACH_DEBUGGER_RETRY_DELAY_MILLIS: number = 1000
 
 /** "sam local start-api" wrapper from the current debug-session. */
@@ -321,7 +321,7 @@ export async function invokeLambdaFunction(
 
         // sam local invoke ...
         const command = new SamCliLocalInvokeInvocation(localInvokeArgs)
-        let samVersion: string | undefined 
+        let samVersion: string | undefined
         let invokeResult: telemetry.Result = 'Failed'
 
         try {
