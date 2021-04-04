@@ -4,9 +4,10 @@
  */
 
 import { ServiceConfigurationOptions } from 'aws-sdk/lib/service'
-import { env, version } from 'vscode'
+import { env, version, workspace } from 'vscode'
 import { AwsContext } from './awsContext'
 import { pluginVersion } from './extensionUtilities'
+
 
 export interface AWSClientBuilder {
     createAndConfigureServiceClient<T>(
@@ -48,7 +49,10 @@ export class DefaultAWSClientBuilder implements AWSClientBuilder {
             const platformName = env.appName.replace(/\s/g, '-')
             awsServiceOpts.customUserAgent = `AWS-Toolkit-For-VSCode/${pluginVersion} ${platformName}/${version}`
         }
-
+        
+        var endpoint = workspace.getConfiguration('aws').get<string>('endpoint')
+        if(endpoint)
+            awsServiceOpts.endpoint = endpoint
         return awsServiceFactory(awsServiceOpts)
     }
 }
